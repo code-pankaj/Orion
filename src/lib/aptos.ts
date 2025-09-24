@@ -131,22 +131,29 @@ export const viewFunctions = {
   // Get account balance
   async getBalance(address: string): Promise<number> {
     try {
-      const resources = await aptos.getAccountResources({
+      // Prefer direct APT amount API (returns octas)
+      const amount = await aptos.getAccountAPTAmount({
         accountAddress: address,
       })
-      
-      const coinStore = resources.find(
-        (r) => r.type === '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>'
-      )
-      
-      if (coinStore && coinStore.data) {
-        const data = coinStore.data as { coin: { value: string } }
-        return parseInt(data.coin.value)
-      }
-      
-      return 0
+      // The SDK may return bigint; normalize to number if safe
+      const asNumber = typeof amount === 'bigint' ? Number(amount) : amount
+      return Number.isFinite(asNumber) ? asNumber : 0
     } catch (error) {
-      console.error('Error getting balance:', error)
+      console.error('Error getting balance via getAccountAPTAmount, falling back to CoinStore:', error)
+      try {
+        const resources = await aptos.getAccountResources({
+          accountAddress: address,
+        })
+        const coinStore = resources.find(
+          (r) => r.type === '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>'
+        )
+        if (coinStore && coinStore.data) {
+          const data = coinStore.data as { coin: { value: string } }
+          return parseInt(data.coin.value)
+        }
+      } catch (inner) {
+        console.error('Fallback CoinStore balance failed:', inner)
+      }
       return 0
     }
   },

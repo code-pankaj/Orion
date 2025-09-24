@@ -9,17 +9,21 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "next": "15.5.4",
     "@aptos-labs/ts-sdk": "^1.28.0",
-    "@aptos-labs/wallet-adapter-react": "^3.7.1",
     "@aptos-labs/wallet-adapter-ant-design": "^2.0.5",
-    "zustand": "^5.0.1",
+    "@aptos-labs/wallet-adapter-react": "^3.7.1",
+    "@reown/appkit": "^1.8.6",
+    "@reown/appkit-common": "^1.8.6",
+    "@reown/appkit-universal-connector": "^1.8.6",
+    "clsx": "^2.1.1",
+    "ethers": "^6.15.0",
     "lightweight-charts": "^4.2.0",
     "lucide-react": "^0.460.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.4"
+    "next": "15.5.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^2.5.4",
+    "zustand": "^5.0.1"
   },
   "devDependencies": {
     "typescript": "^5",

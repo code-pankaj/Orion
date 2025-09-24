@@ -8,6 +8,7 @@ import { PastRounds } from '@/components/PastRounds'
 import { useBettingStore } from '@/store/betting'
 import { viewFunctions } from '@/lib/aptos'
 import { useWallet } from '@aptos-labs/wallet-adapter-react'
+import { config } from '@/lib/config'
 
 export default function Home() {
   const { account } = useWallet()
@@ -19,8 +20,13 @@ export default function Home() {
     currentRound,
   } = useBettingStore()
 
+  const isContractConfigured = Boolean(
+    config.aptos.moduleAddress && config.aptos.moduleAddress !== '0x1'
+  )
+
   // Initialize contract if needed
   useEffect(() => {
+    if (!isContractConfigured) return
     const initializeContract = async () => {
       try {
         const response = await fetch('/api/contract/init', {
@@ -59,10 +65,23 @@ export default function Home() {
 
     // Only initialize once when the component mounts
     initializeContract()
-  }, []) // Empty dependency array - run only once
+  }, [isContractConfigured]) // Run only when contract is configured
 
   // Load current round and update countdown
   useEffect(() => {
+    if (!isContractConfigured) {
+      // Use demo round if contract not configured
+      setCurrentRound({
+        id: 1,
+        startPrice: 12.5000,
+        expiryTimeSecs: Math.floor(Date.now() / 1000) + 300,
+        settled: false,
+        upPool: 50000000,
+        downPool: 75000000,
+        totalPool: 125000000,
+      })
+      return
+    }
     const loadCurrentRound = async () => {
       try {
         const currentRoundId = await viewFunctions.getCurrentRoundId()
@@ -124,7 +143,7 @@ export default function Home() {
     const interval = setInterval(loadCurrentRound, 10000) // Update every 10 seconds
 
     return () => clearInterval(interval)
-  }, [setCurrentRound])
+  }, [setCurrentRound, isContractConfigured])
 
   // Update countdown timer
   useEffect(() => {
@@ -163,6 +182,35 @@ export default function Home() {
 
   // Load past rounds
   useEffect(() => {
+    if (!isContractConfigured) {
+      // Use demo past rounds if contract not configured
+      const demoPastRounds = [
+        {
+          id: 3,
+          startPrice: 12000000,
+          endPrice: 12500000,
+          expiryTimeSecs: Math.floor(Date.now() / 1000) - 600,
+          settled: true,
+          upPool: 80000000,
+          downPool: 40000000,
+          totalPool: 120000000,
+          winSide: 'up' as const,
+        },
+        {
+          id: 2,
+          startPrice: 11800000,
+          endPrice: 11600000,
+          expiryTimeSecs: Math.floor(Date.now() / 1000) - 900,
+          settled: true,
+          upPool: 30000000,
+          downPool: 70000000,
+          totalPool: 100000000,
+          winSide: 'down' as const,
+        },
+      ]
+      setPastRounds(demoPastRounds)
+      return
+    }
     const loadPastRounds = async () => {
       try {
         const currentRoundId = await viewFunctions.getCurrentRoundId()
@@ -231,7 +279,7 @@ export default function Home() {
     const interval = setInterval(loadPastRounds, 30000) // Update every 30 seconds
 
     return () => clearInterval(interval)
-  }, [setPastRounds])
+  }, [setPastRounds, isContractConfigured])
 
   return (
     <div className="min-h-screen bg-gray-950">

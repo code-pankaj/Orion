@@ -37,10 +37,11 @@ export async function GET() {
       symbol: 'APT/USD',
       raw: priceData, // Include raw data for debugging
     })
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching price:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Failed to fetch price data', details: error.message },
+      { error: 'Failed to fetch price data', details: errorMessage },
       { status: 500 }
     )
   }

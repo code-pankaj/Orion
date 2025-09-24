@@ -51,12 +51,13 @@ export async function POST(request: Request) {
       potentialPayout,
       canClaim: round.settled && potentialPayout > 0 && !userBet.claimed
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error checking winnings:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       { 
         error: 'Failed to check winnings',
-        details: error.message,
+        details: errorMessage,
       },
       { status: 500 }
     )

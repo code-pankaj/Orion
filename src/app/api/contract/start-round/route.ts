@@ -35,7 +35,7 @@ export async function POST() {
       clientConfig: {
         HEADERS: {
           Authorization: `Bearer ${config.aptos.apiKey}`,
-          Origin: 'http://localhost:3001',
+          Origin: 'http://localhost:3000',
           'Content-Type': 'application/json',
         }
       },
@@ -78,13 +78,15 @@ export async function POST() {
       duration: config.keeper.roundDuration,
       transaction: executedTxn,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error starting round:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : undefined
     return NextResponse.json(
       { 
         error: 'Failed to start round',
-        details: error.message,
-        stack: error.stack,
+        details: errorMessage,
+        stack: errorStack,
       },
       { status: 500 }
     )

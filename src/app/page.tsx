@@ -5,6 +5,7 @@ import { WalletConnect } from '@/components/WalletConnect'
 import { TradingChart } from '@/components/TradingChart'
 import { BettingPanel } from '@/components/BettingPanel'
 import { PastRounds } from '@/components/PastRounds'
+import { ClaimableRewards } from '@/components/ClaimableRewards'
 import { useBettingStore } from '@/store/betting'
 import { viewFunctions } from '@/lib/aptos'
 import { useWallet } from '@aptos-labs/wallet-adapter-react'
@@ -210,9 +211,10 @@ export default function Home() {
             <TradingChart />
           </div>
 
-          {/* Right Column - Betting Panel */}
-          <div>
+          {/* Right Column - Betting Panel and Claimable Rewards */}
+          <div className="space-y-8">
             <BettingPanel />
+            <ClaimableRewards />
           </div>
         </div>
 

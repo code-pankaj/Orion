@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useWallet } from '@aptos-labs/wallet-adapter-react'
 import { Button } from '@/components/ui/Button'
 import { useBettingStore } from '@/store/betting'
-import { contractFunctions, viewFunctions } from '@/lib/aptos'
+import { viewFunctions } from '@/lib/aptos'
+import { config } from '@/lib/config'
 import { formatTime, formatCurrency, cn } from '@/lib/utils'
 import { TrendingUp, TrendingDown, Clock, DollarSign } from 'lucide-react'
 
@@ -48,7 +49,7 @@ export function BettingPanel() {
           setUserBet(null)
           setPotentialPayout(0)
         }
-      } catch (error) {
+      } catch {
         console.log('No bet found for user in current round')
         setUserBet(null)
         setPotentialPayout(0)
@@ -74,16 +75,18 @@ export function BettingPanel() {
       // Convert APT to octas (1 APT = 100,000,000 octas)
       const amountInOctas = Math.floor(amount * 100000000)
       
-      // Create transaction payload
-      const payload = contractFunctions.placeBet(
-        currentRound.id,
-        side === 'up',
-        amountInOctas
-      )
-
       // Submit transaction
       const response = await signAndSubmitTransaction({
-        data: payload,
+        sender: account.address,
+        data: {
+          function: `${config.aptos.moduleAddress}::betting::place_bet`,
+          functionArguments: [
+            config.aptos.moduleAddress,
+            currentRound.id,
+            side === 'up',
+            amountInOctas,
+          ],
+        },
       })
 
       console.log('Transaction submitted:', response)
@@ -106,9 +109,10 @@ export function BettingPanel() {
       // Reset bet amount after successful bet
       setBetAmount('0.1')
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error placing bet:', error)
-      alert(`Failed to place bet: ${error.message || 'Unknown error'}`)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      alert(`Failed to place bet: ${errorMessage}`)
     } finally {
       setIsPlacingBet(false)
       setSelectedSide(null)
@@ -149,9 +153,10 @@ export function BettingPanel() {
         console.error('Failed to claim winnings:', result.error)
         alert(`Failed to claim: ${result.details || result.error}`)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error claiming winnings:', error)
-      alert(`Error claiming: ${error.message}`)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      alert(`Error claiming: ${errorMessage}`)
     } finally {
       setIsClaiming(false)
     }

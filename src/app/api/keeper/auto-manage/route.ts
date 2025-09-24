@@ -79,12 +79,13 @@ export async function POST() {
         expiryTimeSecs: round.expiryTimeSecs,
       })
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in auto-manage:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       { 
         error: 'Failed to auto-manage rounds',
-        details: error.message,
+        details: errorMessage,
       },
       { status: 500 }
     )

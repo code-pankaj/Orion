@@ -30,7 +30,10 @@ export async function POST() {
       console.log(`Round ${currentRoundId} has expired, settling and starting next round...`)
       
       // Get current price for settlement
-      const priceResponse = await fetch(`${process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000'}/api/price`)
+      const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL 
+        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` 
+        : 'http://localhost:3000'
+      const priceResponse = await fetch(`${baseUrl}/api/price`)
       if (!priceResponse.ok) {
         throw new Error('Failed to fetch current price')
       }
@@ -38,7 +41,7 @@ export async function POST() {
       const currentPrice = priceData.price
 
       // Call the settle endpoint to settle current round and start next
-      const settleResponse = await fetch(`${process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3001'}/api/keeper/settle`, {
+      const settleResponse = await fetch(`${baseUrl}/api/keeper/settle`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

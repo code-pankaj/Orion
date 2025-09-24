@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const endPriceInMicroDollars = Math.floor(endPrice * 1000000)
 
     // Settle the current round
-    const settleTransaction = await aptos.transaction.build.simple({
+    let settleTransaction = await aptos.transaction.build.simple({
       sender: keeper.accountAddress,
       data: {
         function: `${config.aptos.moduleAddress}::betting::settle`,
@@ -55,10 +55,42 @@ export async function POST(request: Request) {
       },
     })
 
-    const settleCommittedTxn = await aptos.signAndSubmitTransaction({
-      signer: keeper,
-      transaction: settleTransaction,
-    })
+    // Submit settle transaction with retry logic for sequence number issues
+    let settleCommittedTxn: any
+    let retryCount = 0
+    const maxRetries = 3
+    
+    while (retryCount < maxRetries) {
+      try {
+        settleCommittedTxn = await aptos.signAndSubmitTransaction({
+          signer: keeper,
+          transaction: settleTransaction,
+        })
+        break // Success, exit retry loop
+      } catch (error: unknown) {
+        retryCount++
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        
+        if (errorMessage.includes('SEQUENCE_NUMBER_TOO_OLD') && retryCount < maxRetries) {
+          console.log(`Sequence number too old, retrying (${retryCount}/${maxRetries})...`)
+          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second before retry
+          
+          // Rebuild transaction with fresh sequence number
+          settleTransaction = await aptos.transaction.build.simple({
+            sender: keeper.accountAddress,
+            data: {
+              function: `${config.aptos.moduleAddress}::betting::settle`,
+              functionArguments: [
+                roundId,
+                endPriceInMicroDollars,
+              ],
+            },
+          })
+        } else {
+          throw error // Re-throw if not a sequence number error or max retries reached
+        }
+      }
+    }
 
     const settleExecutedTxn = await aptos.waitForTransaction({
       transactionHash: settleCommittedTxn.hash,
@@ -71,7 +103,10 @@ export async function POST(request: Request) {
     await new Promise(resolve => setTimeout(resolve, 5000))
 
     // Get current price for next round
-    const priceResponse = await fetch(`${process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3001'}/api/price`)
+    const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL 
+      ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` 
+      : 'http://localhost:3000'
+    const priceResponse = await fetch(`${baseUrl}/api/price`)
     if (!priceResponse.ok) {
       throw new Error('Failed to fetch current price for next round')
     }
@@ -88,7 +123,7 @@ export async function POST(request: Request) {
     console.log('Starting next round with price:', nextStartPrice, 'micro-dollars:', nextStartPriceInMicroDollars)
 
     // Start the next round
-    const startTransaction = await aptos.transaction.build.simple({
+    let startTransaction = await aptos.transaction.build.simple({
       sender: keeper.accountAddress,
       data: {
         function: `${config.aptos.moduleAddress}::betting::start_round`,
@@ -99,10 +134,41 @@ export async function POST(request: Request) {
       },
     })
 
-    const startCommittedTxn = await aptos.signAndSubmitTransaction({
-      signer: keeper,
-      transaction: startTransaction,
-    })
+    // Submit start transaction with retry logic
+    let startCommittedTxn: any
+    retryCount = 0
+    
+    while (retryCount < maxRetries) {
+      try {
+        startCommittedTxn = await aptos.signAndSubmitTransaction({
+          signer: keeper,
+          transaction: startTransaction,
+        })
+        break // Success, exit retry loop
+      } catch (error: unknown) {
+        retryCount++
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        
+        if (errorMessage.includes('SEQUENCE_NUMBER_TOO_OLD') && retryCount < maxRetries) {
+          console.log(`Sequence number too old on start round, retrying (${retryCount}/${maxRetries})...`)
+          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second before retry
+          
+          // Rebuild transaction with fresh sequence number
+          startTransaction = await aptos.transaction.build.simple({
+            sender: keeper.accountAddress,
+            data: {
+              function: `${config.aptos.moduleAddress}::betting::start_round`,
+              functionArguments: [
+                nextStartPriceInMicroDollars,
+                config.keeper.roundDuration,
+              ],
+            },
+          })
+        } else {
+          throw error // Re-throw if not a sequence number error or max retries reached
+        }
+      }
+    }
 
     const startExecutedTxn = await aptos.waitForTransaction({
       transactionHash: startCommittedTxn.hash,

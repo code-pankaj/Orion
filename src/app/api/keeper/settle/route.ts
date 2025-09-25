@@ -102,16 +102,39 @@ export async function POST(request: Request) {
     console.log('Starting 5-second cooldown...')
     await new Promise(resolve => setTimeout(resolve, 5000))
 
-    // Get current price for next round
-    const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL 
-      ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` 
-      : 'http://localhost:3000'
-    const priceResponse = await fetch(`${baseUrl}/api/price`)
-    if (!priceResponse.ok) {
-      throw new Error('Failed to fetch current price for next round')
+    // Get current price for next round directly from Pyth API
+    let nextStartPrice
+    try {
+      const pythResponse = await fetch(
+        `${config.pyth.endpoint}/api/latest_price_feeds?ids[]=${config.pyth.aptUsdPriceId}`,
+        {
+          next: { revalidate: 1 }, // Cache for 1 second
+        }
+      )
+
+      if (!pythResponse.ok) {
+        throw new Error(`Pyth API error: ${pythResponse.status}`)
+      }
+
+      const data = await pythResponse.json()
+      
+      if (!data || !Array.isArray(data) || data.length === 0) {
+        throw new Error('No price data received from Pyth')
+      }
+
+      const priceFeed = data[0]
+      if (!priceFeed || !priceFeed.price) {
+        throw new Error('Invalid price feed data')
+      }
+
+      const priceData = priceFeed.price
+      nextStartPrice = parseFloat(priceData.price) * Math.pow(10, priceData.expo)
+      
+      console.log('Fetched next round price directly from Pyth:', nextStartPrice)
+    } catch (priceError) {
+      console.error('Error fetching price for next round from Pyth:', priceError)
+      throw new Error(`Failed to fetch current price for next round: ${priceError instanceof Error ? priceError.message : 'Unknown error'}`)
     }
-    const priceData = await priceResponse.json()
-    const nextStartPrice = priceData.price
 
     if (!nextStartPrice || nextStartPrice <= 0) {
       throw new Error('Invalid price data for next round')

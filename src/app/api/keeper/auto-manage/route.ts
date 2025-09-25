@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { viewFunctions } from '@/lib/aptos'
+import { config } from '@/lib/config'
 
 export async function POST() {
   try {
@@ -29,40 +30,71 @@ export async function POST() {
     if (now >= round.expiryTimeSecs && !round.settled) {
       console.log(`Round ${currentRoundId} has expired, settling and starting next round...`)
       
-      // Get current price for settlement
-      const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL 
-        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` 
-        : 'http://localhost:3000'
-      const priceResponse = await fetch(`${baseUrl}/api/price`)
-      if (!priceResponse.ok) {
-        throw new Error('Failed to fetch current price')
+      // Get current price for settlement directly from Pyth API
+      let currentPrice
+      try {
+        const pythResponse = await fetch(
+          `${config.pyth.endpoint}/api/latest_price_feeds?ids[]=${config.pyth.aptUsdPriceId}`,
+          {
+            next: { revalidate: 1 }, // Cache for 1 second
+          }
+        )
+
+        if (!pythResponse.ok) {
+          throw new Error(`Pyth API error: ${pythResponse.status}`)
+        }
+
+        const data = await pythResponse.json()
+        
+        if (!data || !Array.isArray(data) || data.length === 0) {
+          throw new Error('No price data received from Pyth')
+        }
+
+        const priceFeed = data[0]
+        if (!priceFeed || !priceFeed.price) {
+          throw new Error('Invalid price feed data')
+        }
+
+        const priceData = priceFeed.price
+        currentPrice = parseFloat(priceData.price) * Math.pow(10, priceData.expo)
+        
+        console.log('Fetched price directly from Pyth:', currentPrice)
+      } catch (priceError) {
+        console.error('Error fetching price from Pyth:', priceError)
+        throw new Error(`Failed to fetch current price: ${priceError instanceof Error ? priceError.message : 'Unknown error'}`)
       }
-      const priceData = await priceResponse.json()
-      const currentPrice = priceData.price
 
-      // Call the settle endpoint to settle current round and start next
-      const settleResponse = await fetch(`${baseUrl}/api/keeper/settle`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          roundId: currentRoundId,
-          endPrice: currentPrice,
-        }),
-      })
-
-      const settleResult = await settleResponse.json()
-
-      if (settleResult.success) {
-        return NextResponse.json({
-          success: true,
-          message: 'Round auto-settled and next round started',
-          action: 'settled_and_started',
-          data: settleResult,
+      // Settle the round directly instead of making HTTP call
+      try {
+        // Import the settle logic directly
+        const { POST: settleHandler } = await import('../settle/route')
+        
+        // Create a mock request object for the settle handler
+        const mockRequest = new Request('http://localhost:3000/api/keeper/settle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roundId: currentRoundId,
+            endPrice: currentPrice,
+          }),
         })
-      } else {
-        throw new Error(settleResult.error || 'Failed to settle round')
+
+        const settleResponse = await settleHandler(mockRequest)
+        const settleResult = await settleResponse.json()
+
+        if (settleResult.success) {
+          return NextResponse.json({
+            success: true,
+            message: 'Round auto-settled and next round started',
+            action: 'settled_and_started',
+            data: settleResult,
+          })
+        } else {
+          throw new Error(settleResult.error || 'Failed to settle round')
+        }
+      } catch (settleError) {
+        console.error('Error settling round directly:', settleError)
+        throw new Error(`Failed to settle round: ${settleError instanceof Error ? settleError.message : 'Unknown error'}`)
       }
     } else if (round.settled) {
       return NextResponse.json({

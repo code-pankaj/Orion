@@ -11,13 +11,39 @@ export async function POST() {
       )
     }
 
-    // Get current price from our price API
-    const priceResponse = await fetch(`${process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000'}/api/price`)
-    if (!priceResponse.ok) {
-      throw new Error('Failed to fetch current price')
+    // Get current price directly from Pyth API
+    let currentPrice
+    try {
+      const pythResponse = await fetch(
+        `${config.pyth.endpoint}/api/latest_price_feeds?ids[]=${config.pyth.aptUsdPriceId}`,
+        {
+          next: { revalidate: 1 }, // Cache for 1 second
+        }
+      )
+
+      if (!pythResponse.ok) {
+        throw new Error(`Pyth API error: ${pythResponse.status}`)
+      }
+
+      const data = await pythResponse.json()
+      
+      if (!data || !Array.isArray(data) || data.length === 0) {
+        throw new Error('No price data received from Pyth')
+      }
+
+      const priceFeed = data[0]
+      if (!priceFeed || !priceFeed.price) {
+        throw new Error('Invalid price feed data')
+      }
+
+      const priceData = priceFeed.price
+      currentPrice = parseFloat(priceData.price) * Math.pow(10, priceData.expo)
+      
+      console.log('Fetched start price directly from Pyth:', currentPrice)
+    } catch (priceError) {
+      console.error('Error fetching price from Pyth:', priceError)
+      throw new Error(`Failed to fetch current price: ${priceError instanceof Error ? priceError.message : 'Unknown error'}`)
     }
-    const priceData = await priceResponse.json()
-    const currentPrice = priceData.price
 
     if (!currentPrice || currentPrice <= 0) {
       throw new Error('Invalid price data received')
